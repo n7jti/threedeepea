@@ -122,8 +122,8 @@ def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
     electricity = config["electricity"]
     fees_per_kwh_total = float(sum(electricity["fees_per_kwh"]))
 
-    if config.get("average_cost_per_kwh") is not None:
-        tier_only_rate = float(config["average_cost_per_kwh"])
+    if config["cost_model"] == "tier2":
+        tier_only_rate = float(electricity["tier2_rate_per_kwh"])
         return {
             "effective_rate_per_kwh": tier_only_rate + fees_per_kwh_total,
             "tier_only_rate_per_kwh": tier_only_rate,
@@ -135,8 +135,8 @@ def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
             "tier2_usage_kwh": 0.0,
         }
 
-    if config["cost_model"] == "tier2":
-        tier_only_rate = float(electricity["tier2_rate_per_kwh"])
+    if config.get("average_cost_per_kwh") is not None:
+        tier_only_rate = float(config["average_cost_per_kwh"])
         return {
             "effective_rate_per_kwh": tier_only_rate + fees_per_kwh_total,
             "tier_only_rate_per_kwh": tier_only_rate,

@@ -5,7 +5,7 @@ Command line Python tool for estimating 3D print cost.
 ## Usage
 
 ```bash
-python -m threedeepea WEIGHT_GRAMS [options]
+python threedeepea.py WEIGHT_GRAMS [options]
 ```
 
 Required input:

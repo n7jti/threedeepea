@@ -7,6 +7,8 @@ from pathlib import Path
 
 from threedeepea import estimate_cost
 
+SCRIPT_PATH = Path(__file__).resolve().parents[1] / "threedeepea.py"
+
 
 class CostEstimatorTests(unittest.TestCase):
     def test_average_model_includes_tiers_fees_and_repeats(self):
@@ -128,8 +130,7 @@ class CostEstimatorTests(unittest.TestCase):
             completed = subprocess.run(
                 [
                     sys.executable,
-                    "-m",
-                    "threedeepea",
+                    str(SCRIPT_PATH),
                     "0",
                     "--config",
                     str(cfg_path),
@@ -174,8 +175,7 @@ class CostEstimatorTests(unittest.TestCase):
             completed = subprocess.run(
                 [
                     sys.executable,
-                    "-m",
-                    "threedeepea",
+                    str(SCRIPT_PATH),
                     "50",
                     "--config",
                     str(cfg_path),
@@ -189,6 +189,45 @@ class CostEstimatorTests(unittest.TestCase):
         self.assertIn("Resolved configuration:", output)
         self.assertIn("Calculation details:", output)
         self.assertIn("Warm-up kWh per plate:", output)
+
+    def test_cli_standard_report_includes_subtotals_not_verbose_sections(self):
+        config = {
+            "report_level": "standard",
+            "print_time_minutes": 5.0,
+            "print_time_seconds": 0.0,
+            "filament_cost_per_kg": 10.0,
+            "average_cost_per_kwh": 0.20,
+            "cost_model": "average",
+            "repeats": 1,
+            "electricity": {
+                "tier1_kwh": 100.0,
+                "tier1_rate_per_kwh": 0.10,
+                "tier2_rate_per_kwh": 0.20,
+                "fees_per_kwh": [0.01],
+                "typical_monthly_kwh": 100.0,
+            },
+            "printer": {
+                "warmup_minutes": 1.0,
+                "warmup_seconds": 0.0,
+                "warmup_watts": 120.0,
+                "printing_watts": 60.0,
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = Path(tmpdir) / "cfg.json"
+            cfg_path.write_text(json.dumps(config), encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPT_PATH), "50", "--config", str(cfg_path)],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+
+        output = completed.stdout
+        self.assertIn("Warm-up electricity:", output)
+        self.assertIn("Printing electricity:", output)
+        self.assertNotIn("Resolved configuration:", output)
+        self.assertNotIn("Calculation details:", output)
 
 
 if __name__ == "__main__":
