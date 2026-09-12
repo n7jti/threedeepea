@@ -94,7 +94,13 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
         raise ValueError("cost_model must be one of: average, tier2")
     if config["report_level"] not in {"summary", "standard", "verbose"}:
         raise ValueError("report_level must be one of: summary, standard, verbose")
-    if config["repeats"] <= 0:
+    try:
+        repeats_numeric = float(config["repeats"])
+    except (TypeError, ValueError):
+        raise ValueError("repeats must be a positive integer") from None
+    if not repeats_numeric.is_integer():
+        raise ValueError("repeats must be an integer value")
+    if repeats_numeric <= 0:
         raise ValueError("repeats must be greater than 0")
     if float(config["print_time_minutes"]) < 0 or float(config.get("print_time_seconds", 0.0)) < 0:
         raise ValueError("print time values must be non-negative")
@@ -112,6 +118,14 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
         raise ValueError("electricity.tier2_rate_per_kwh must be non-negative")
     if float(electricity["typical_monthly_kwh"]) < 0:
         raise ValueError("electricity.typical_monthly_kwh must be non-negative")
+    fees = electricity.get("fees_per_kwh")
+    if not isinstance(fees, list):
+        raise ValueError("electricity.fees_per_kwh must be a list")
+    for fee in fees:
+        try:
+            float(fee)
+        except (TypeError, ValueError):
+            raise ValueError("electricity.fees_per_kwh entries must be numeric") from None
 
     printer = config["printer"]
     if float(printer["warmup_minutes"]) < 0 or float(printer["warmup_seconds"]) < 0:
@@ -124,7 +138,7 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
 
 def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
     electricity = config["electricity"]
-    fees_per_kwh_total = float(sum(electricity["fees_per_kwh"]))
+    fees_per_kwh_total = sum(float(fee) for fee in electricity["fees_per_kwh"])
 
     if config["cost_model"] == "tier2":
         tier_only_rate = float(electricity["tier2_rate_per_kwh"])
@@ -184,7 +198,7 @@ def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
 def estimate_cost(weight_grams: float, config: Dict[str, Any]) -> Dict[str, Any]:
     validate_inputs(weight_grams, config)
 
-    repeats = int(config["repeats"])
+    repeats = int(float(config["repeats"]))
     print_seconds = float(config["print_time_minutes"]) * 60.0 + float(config.get("print_time_seconds", 0.0))
     warmup_seconds = float(config["printer"]["warmup_minutes"]) * 60.0 + float(config["printer"]["warmup_seconds"])
 

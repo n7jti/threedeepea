@@ -70,6 +70,32 @@ class CostEstimatorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             estimate_cost(1.0, config)
 
+    def test_invalid_fee_entry_is_rejected(self):
+        config = {
+            "print_time_minutes": 1.0,
+            "print_time_seconds": 0.0,
+            "filament_cost_per_kg": 1.0,
+            "average_cost_per_kwh": None,
+            "cost_model": "average",
+            "repeats": 1,
+            "report_level": "summary",
+            "electricity": {
+                "tier1_kwh": 1.0,
+                "tier1_rate_per_kwh": 0.1,
+                "tier2_rate_per_kwh": 0.2,
+                "fees_per_kwh": [0.01, "invalid"],
+                "typical_monthly_kwh": 1.0,
+            },
+            "printer": {
+                "warmup_minutes": 0.0,
+                "warmup_seconds": 0.0,
+                "warmup_watts": 0.0,
+                "printing_watts": 0.0,
+            },
+        }
+        with self.assertRaises(ValueError):
+            estimate_cost(1.0, config)
+
     def test_tier2_model_uses_tier2_plus_fees(self):
         config = {
             "print_time_minutes": 10.0,

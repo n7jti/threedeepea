@@ -28,3 +28,4 @@ Optional inputs are read from `threedeepea_config.json` and can all be overridde
 - `verbose`: standard + resolved configuration + intermediate calculations.
 
 `--average-cost-per-kwh` is treated as the base energy rate. Any configured `fees_per_kwh` are still applied on top of it.
+If you provide one or more `--fee-per-kwh` flags, they replace the config file's `fees_per_kwh` list.
