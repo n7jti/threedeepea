@@ -90,6 +90,10 @@ def apply_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dict[st
 def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
     if weight_grams < 0:
         raise ValueError("weight_grams must be non-negative")
+    if config["cost_model"] not in {"average", "tier2"}:
+        raise ValueError("cost_model must be one of: average, tier2")
+    if config["report_level"] not in {"summary", "standard", "verbose"}:
+        raise ValueError("report_level must be one of: summary, standard, verbose")
     if config["repeats"] <= 0:
         raise ValueError("repeats must be greater than 0")
     if float(config["print_time_minutes"]) < 0 or float(config.get("print_time_seconds", 0.0)) < 0:
@@ -135,7 +139,7 @@ def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
             "tier2_usage_kwh": 0.0,
         }
 
-    if config.get("average_cost_per_kwh") is not None:
+    if config["cost_model"] == "average" and config.get("average_cost_per_kwh") is not None:
         tier_only_rate = float(config["average_cost_per_kwh"])
         return {
             "effective_rate_per_kwh": tier_only_rate + fees_per_kwh_total,
