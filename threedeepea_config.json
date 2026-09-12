@@ -1,0 +1,22 @@
+{
+  "print_time_minutes": 60.0,
+  "print_time_seconds": 0.0,
+  "filament_cost_per_kg": 22.0,
+  "average_cost_per_kwh": null,
+  "cost_model": "average",
+  "repeats": 1,
+  "report_level": "summary",
+  "electricity": {
+    "tier1_kwh": 500.0,
+    "tier1_rate_per_kwh": 0.2,
+    "tier2_rate_per_kwh": 0.35,
+    "fees_per_kwh": [0.03],
+    "typical_monthly_kwh": 600.0
+  },
+  "printer": {
+    "warmup_minutes": 5.0,
+    "warmup_seconds": 0.0,
+    "warmup_watts": 220.0,
+    "printing_watts": 120.0
+  }
+}
