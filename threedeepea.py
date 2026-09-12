@@ -32,6 +32,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 def load_config(path: Path) -> Dict[str, Any]:
     config = deepcopy(DEFAULT_CONFIG)
     if path.exists():
+        if not path.is_file():
+            raise ValueError(f"Config path is not a file: {path}")
         with path.open("r", encoding="utf-8") as handle:
             user_config = json.load(handle)
         merge_dicts(config, user_config)
@@ -102,8 +104,11 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
         raise ValueError("repeats must be an integer value")
     if repeats_numeric <= 0:
         raise ValueError("repeats must be greater than 0")
-    if float(config["print_time_minutes"]) < 0 or float(config.get("print_time_seconds", 0.0)) < 0:
+    print_time_seconds = float(config.get("print_time_seconds", 0.0))
+    if float(config["print_time_minutes"]) < 0 or print_time_seconds < 0:
         raise ValueError("print time values must be non-negative")
+    if print_time_seconds >= 60:
+        raise ValueError("print_time_seconds must be less than 60")
     if float(config["filament_cost_per_kg"]) < 0:
         raise ValueError("filament_cost_per_kg must be non-negative")
     if config.get("average_cost_per_kwh") is not None and float(config["average_cost_per_kwh"]) < 0:
@@ -128,8 +133,11 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
             raise ValueError("electricity.fees_per_kwh entries must be numeric") from None
 
     printer = config["printer"]
-    if float(printer["warmup_minutes"]) < 0 or float(printer["warmup_seconds"]) < 0:
+    warmup_seconds = float(printer["warmup_seconds"])
+    if float(printer["warmup_minutes"]) < 0 or warmup_seconds < 0:
         raise ValueError("printer warm-up time values must be non-negative")
+    if warmup_seconds >= 60:
+        raise ValueError("printer.warmup_seconds must be less than 60")
     if float(printer["warmup_watts"]) < 0:
         raise ValueError("printer.warmup_watts must be non-negative")
     if float(printer["printing_watts"]) < 0:
@@ -335,11 +343,15 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    config_path = Path(args.config)
-    config = load_config(config_path)
-    config = apply_overrides(config, args)
+    try:
+        config_path = Path(args.config)
+        config = load_config(config_path)
+        config = apply_overrides(config, args)
+        result = estimate_cost(args.weight_grams, config)
+    except ValueError as error:
+        parser.error(str(error))
+        return
 
-    result = estimate_cost(args.weight_grams, config)
     print(render_report(config, result))
 
 

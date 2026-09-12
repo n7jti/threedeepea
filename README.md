@@ -29,3 +29,5 @@ Optional inputs are read from `threedeepea_config.json` and can all be overridde
 
 `--average-cost-per-kwh` is treated as the base energy rate. Any configured `fees_per_kwh` are still applied on top of it.
 If you provide one or more `--fee-per-kwh` flags, they replace the config file's `fees_per_kwh` list.
+Fee values can be positive or negative, matching bills that include credits or surcharges.
+`--print-time-seconds` and `--warmup-seconds` must be between 0 and 59.999... seconds.
