@@ -228,6 +228,50 @@ class CostEstimatorTests(unittest.TestCase):
             )
         self.assertIn("Electricity: $0.25", completed.stdout)
 
+    def test_cli_electricity_model_alias_overrides_config(self):
+        config = {
+            "report_level": "summary",
+            "print_time_minutes": 0.0,
+            "print_time_seconds": 0.0,
+            "filament_cost_per_kg": 0.0,
+            "average_cost_per_kwh": None,
+            "cost_model": "average",
+            "repeats": 1,
+            "electricity": {
+                "tier1_kwh": 100.0,
+                "tier1_rate_per_kwh": 0.10,
+                "tier2_rate_per_kwh": 0.20,
+                "fees_per_kwh": [0.01],
+                "typical_monthly_kwh": 100.0,
+            },
+            "printer": {
+                "warmup_minutes": 60.0,
+                "warmup_seconds": 0.0,
+                "warmup_watts": 1000.0,
+                "printing_watts": 0.0,
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_path = Path(tmpdir) / "cfg.json"
+            cfg_path.write_text(json.dumps(config), encoding="utf-8")
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_PATH),
+                    "0",
+                    "--config",
+                    str(cfg_path),
+                    "--electricity-model",
+                    "tier2",
+                    "--fee-per-kwh",
+                    "0.05",
+                ],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+        self.assertIn("Electricity: $0.25", completed.stdout)
+
     def test_cli_verbose_contains_configuration_and_details(self):
         config = {
             "report_level": "verbose",
@@ -353,6 +397,32 @@ class CostEstimatorTests(unittest.TestCase):
                 capture_output=True,
             )
         self.assertIn("Electricity: $0.23", completed.stdout)
+
+    def test_nan_input_is_rejected(self):
+        config = {
+            "print_time_minutes": float("nan"),
+            "print_time_seconds": 0.0,
+            "filament_cost_per_kg": 1.0,
+            "average_cost_per_kwh": None,
+            "cost_model": "average",
+            "repeats": 1,
+            "report_level": "summary",
+            "electricity": {
+                "tier1_kwh": 1.0,
+                "tier1_rate_per_kwh": 0.1,
+                "tier2_rate_per_kwh": 0.2,
+                "fees_per_kwh": [0.01],
+                "typical_monthly_kwh": 1.0,
+            },
+            "printer": {
+                "warmup_minutes": 0.0,
+                "warmup_seconds": 0.0,
+                "warmup_watts": 0.0,
+                "printing_watts": 0.0,
+            },
+        }
+        with self.assertRaises(ValueError):
+            estimate_cost(1.0, config)
 
 
 if __name__ == "__main__":

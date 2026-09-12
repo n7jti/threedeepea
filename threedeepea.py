@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List
@@ -90,57 +91,63 @@ def apply_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dict[st
 
 
 def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
+    def finite_number(name: str, value: Any) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{name} must be numeric") from None
+        if not math.isfinite(number):
+            raise ValueError(f"{name} must be finite")
+        return number
+
+    weight_grams = finite_number("weight_grams", weight_grams)
     if weight_grams < 0:
         raise ValueError("weight_grams must be non-negative")
     if config["cost_model"] not in {"average", "tier2"}:
         raise ValueError("cost_model must be one of: average, tier2")
     if config["report_level"] not in {"summary", "standard", "verbose"}:
         raise ValueError("report_level must be one of: summary, standard, verbose")
-    try:
-        repeats_numeric = float(config["repeats"])
-    except (TypeError, ValueError):
-        raise ValueError("repeats must be a positive integer") from None
+    repeats_numeric = finite_number("repeats", config["repeats"])
     if not repeats_numeric.is_integer():
         raise ValueError("repeats must be an integer value")
     if repeats_numeric <= 0:
         raise ValueError("repeats must be greater than 0")
-    print_time_seconds = float(config.get("print_time_seconds", 0.0))
-    if float(config["print_time_minutes"]) < 0 or print_time_seconds < 0:
+    print_time_minutes = finite_number("print_time_minutes", config["print_time_minutes"])
+    print_time_seconds = finite_number("print_time_seconds", config.get("print_time_seconds", 0.0))
+    if print_time_minutes < 0 or print_time_seconds < 0:
         raise ValueError("print time values must be non-negative")
     if print_time_seconds >= 60:
         raise ValueError("print_time_seconds must be less than 60")
-    if float(config["filament_cost_per_kg"]) < 0:
+    if finite_number("filament_cost_per_kg", config["filament_cost_per_kg"]) < 0:
         raise ValueError("filament_cost_per_kg must be non-negative")
-    if config.get("average_cost_per_kwh") is not None and float(config["average_cost_per_kwh"]) < 0:
+    if config.get("average_cost_per_kwh") is not None and finite_number("average_cost_per_kwh", config["average_cost_per_kwh"]) < 0:
         raise ValueError("average_cost_per_kwh must be non-negative when provided")
 
     electricity = config["electricity"]
-    if float(electricity["tier1_kwh"]) < 0:
+    if finite_number("electricity.tier1_kwh", electricity["tier1_kwh"]) < 0:
         raise ValueError("electricity.tier1_kwh must be non-negative")
-    if float(electricity["tier1_rate_per_kwh"]) < 0:
+    if finite_number("electricity.tier1_rate_per_kwh", electricity["tier1_rate_per_kwh"]) < 0:
         raise ValueError("electricity.tier1_rate_per_kwh must be non-negative")
-    if float(electricity["tier2_rate_per_kwh"]) < 0:
+    if finite_number("electricity.tier2_rate_per_kwh", electricity["tier2_rate_per_kwh"]) < 0:
         raise ValueError("electricity.tier2_rate_per_kwh must be non-negative")
-    if float(electricity["typical_monthly_kwh"]) < 0:
+    if finite_number("electricity.typical_monthly_kwh", electricity["typical_monthly_kwh"]) < 0:
         raise ValueError("electricity.typical_monthly_kwh must be non-negative")
     fees = electricity.get("fees_per_kwh")
     if not isinstance(fees, list):
         raise ValueError("electricity.fees_per_kwh must be a list")
     for fee in fees:
-        try:
-            float(fee)
-        except (TypeError, ValueError):
-            raise ValueError("electricity.fees_per_kwh entries must be numeric") from None
+        finite_number("electricity.fees_per_kwh entry", fee)
 
     printer = config["printer"]
-    warmup_seconds = float(printer["warmup_seconds"])
-    if float(printer["warmup_minutes"]) < 0 or warmup_seconds < 0:
+    warmup_minutes = finite_number("printer.warmup_minutes", printer["warmup_minutes"])
+    warmup_seconds = finite_number("printer.warmup_seconds", printer["warmup_seconds"])
+    if warmup_minutes < 0 or warmup_seconds < 0:
         raise ValueError("printer warm-up time values must be non-negative")
     if warmup_seconds >= 60:
         raise ValueError("printer.warmup_seconds must be less than 60")
-    if float(printer["warmup_watts"]) < 0:
+    if finite_number("printer.warmup_watts", printer["warmup_watts"]) < 0:
         raise ValueError("printer.warmup_watts must be non-negative")
-    if float(printer["printing_watts"]) < 0:
+    if finite_number("printer.printing_watts", printer["printing_watts"]) < 0:
         raise ValueError("printer.printing_watts must be non-negative")
 
 
@@ -321,8 +328,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--print-time-seconds", type=float)
     parser.add_argument("--filament-cost-per-kg", type=float)
     parser.add_argument("--average-cost-per-kwh", type=float)
-    parser.add_argument("--cost-model", dest="cost_model", choices=["average", "tier2"])
-    parser.add_argument("--electricity-model", dest="cost_model", choices=["average", "tier2"])
+    parser.add_argument("--cost-model", "--electricity-model", dest="cost_model", choices=["average", "tier2"])
     parser.add_argument("--repeats", type=int)
     parser.add_argument("--report-level", choices=["summary", "standard", "verbose"])
 
