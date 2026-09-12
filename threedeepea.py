@@ -321,7 +321,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--print-time-seconds", type=float)
     parser.add_argument("--filament-cost-per-kg", type=float)
     parser.add_argument("--average-cost-per-kwh", type=float)
-    parser.add_argument("--cost-model", choices=["average", "tier2"])
+    parser.add_argument("--cost-model", dest="cost_model", choices=["average", "tier2"])
+    parser.add_argument("--electricity-model", dest="cost_model", choices=["average", "tier2"])
     parser.add_argument("--repeats", type=int)
     parser.add_argument("--report-level", choices=["summary", "standard", "verbose"])
 

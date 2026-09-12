@@ -15,7 +15,7 @@ Optional inputs are read from `threedeepea_config.json` and can all be overridde
 - print time (`--print-time-minutes`, `--print-time-seconds`)
 - filament cost (`--filament-cost-per-kg`)
 - average electricity override (`--average-cost-per-kwh`)
-- electricity cost model (`--cost-model average|tier2`)
+- electricity cost model (`--cost-model average|tier2` or `--electricity-model average|tier2`)
 - repeats (`--repeats`)
 - report level (`--report-level summary|standard|verbose`)
 - tier and fee settings (`--tier1-kwh`, `--tier1-rate-per-kwh`, `--tier2-rate-per-kwh`, `--fee-per-kwh`, `--typical-monthly-kwh`)

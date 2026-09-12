@@ -1,7 +1,7 @@
 {
   "print_time_minutes": 60.0,
   "print_time_seconds": 0.0,
-  "filament_cost_per_kg": 22.0,
+  "filament_cost_per_kg": 20.0,
   "average_cost_per_kwh": null,
   "cost_model": "average",
   "repeats": 1,
