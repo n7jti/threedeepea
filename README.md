@@ -26,3 +26,5 @@ Optional inputs are read from `threedeepea_config.json` and can all be overridde
 - `summary` (default): cost per plate plus filament and electricity totals.
 - `standard`: summary + warm-up and printing electricity subtotals.
 - `verbose`: standard + resolved configuration + intermediate calculations.
+
+`--average-cost-per-kwh` is treated as the base energy rate. Any configured `fees_per_kwh` are still applied on top of it.

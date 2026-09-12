@@ -92,6 +92,30 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
         raise ValueError("weight_grams must be non-negative")
     if config["repeats"] <= 0:
         raise ValueError("repeats must be greater than 0")
+    if float(config["print_time_minutes"]) < 0 or float(config.get("print_time_seconds", 0.0)) < 0:
+        raise ValueError("print time values must be non-negative")
+    if float(config["filament_cost_per_kg"]) < 0:
+        raise ValueError("filament_cost_per_kg must be non-negative")
+    if config.get("average_cost_per_kwh") is not None and float(config["average_cost_per_kwh"]) < 0:
+        raise ValueError("average_cost_per_kwh must be non-negative when provided")
+
+    electricity = config["electricity"]
+    if float(electricity["tier1_kwh"]) < 0:
+        raise ValueError("electricity.tier1_kwh must be non-negative")
+    if float(electricity["tier1_rate_per_kwh"]) < 0:
+        raise ValueError("electricity.tier1_rate_per_kwh must be non-negative")
+    if float(electricity["tier2_rate_per_kwh"]) < 0:
+        raise ValueError("electricity.tier2_rate_per_kwh must be non-negative")
+    if float(electricity["typical_monthly_kwh"]) < 0:
+        raise ValueError("electricity.typical_monthly_kwh must be non-negative")
+
+    printer = config["printer"]
+    if float(printer["warmup_minutes"]) < 0 or float(printer["warmup_seconds"]) < 0:
+        raise ValueError("printer warm-up time values must be non-negative")
+    if float(printer["warmup_watts"]) < 0:
+        raise ValueError("printer.warmup_watts must be non-negative")
+    if float(printer["printing_watts"]) < 0:
+        raise ValueError("printer.printing_watts must be non-negative")
 
 
 def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
@@ -99,11 +123,11 @@ def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
     fees_per_kwh_total = float(sum(electricity["fees_per_kwh"]))
 
     if config.get("average_cost_per_kwh") is not None:
-        rate = float(config["average_cost_per_kwh"])
+        tier_only_rate = float(config["average_cost_per_kwh"])
         return {
-            "effective_rate_per_kwh": rate,
-            "tier_only_rate_per_kwh": rate,
-            "fees_per_kwh_total": 0.0,
+            "effective_rate_per_kwh": tier_only_rate + fees_per_kwh_total,
+            "tier_only_rate_per_kwh": tier_only_rate,
+            "fees_per_kwh_total": fees_per_kwh_total,
             "monthly_energy_cost": 0.0,
             "monthly_total_cost": 0.0,
             "monthly_usage_kwh": 0.0,
@@ -134,11 +158,16 @@ def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
         + tier2_usage * float(electricity["tier2_rate_per_kwh"])
     )
     monthly_total_cost = monthly_energy_cost + (usage * fees_per_kwh_total)
-    effective_rate = monthly_total_cost / usage if usage > 0 else float(electricity["tier2_rate_per_kwh"]) + fees_per_kwh_total
+    if usage > 0:
+        tier_only_rate = monthly_energy_cost / usage
+        effective_rate = monthly_total_cost / usage
+    else:
+        tier_only_rate = float(electricity["tier1_rate_per_kwh"])
+        effective_rate = tier_only_rate + fees_per_kwh_total
 
     return {
         "effective_rate_per_kwh": effective_rate,
-        "tier_only_rate_per_kwh": monthly_energy_cost / usage if usage > 0 else 0.0,
+        "tier_only_rate_per_kwh": tier_only_rate,
         "fees_per_kwh_total": fees_per_kwh_total,
         "monthly_energy_cost": monthly_energy_cost,
         "monthly_total_cost": monthly_total_cost,
