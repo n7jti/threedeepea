@@ -7,10 +7,7 @@ from typing import Any, Dict, List
 
 
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "print_time_minutes": 60.0,
-    "print_time_seconds": 0.0,
     "filament_cost_per_kg": 20.0,
-    "average_cost_per_kwh": None,
     "cost_model": "average",
     "repeats": 1,
     "report_level": "summary",
@@ -23,7 +20,6 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "printer": {
         "warmup_minutes": 5.0,
-        "warmup_seconds": 0.0,
         "warmup_watts": 220.0,
         "printing_watts": 120.0,
     },
@@ -53,10 +49,7 @@ def apply_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dict[st
     cfg = deepcopy(config)
 
     scalar_overrides = {
-        "print_time_minutes": args.print_time_minutes,
-        "print_time_seconds": args.print_time_seconds,
         "filament_cost_per_kg": args.filament_cost_per_kg,
-        "average_cost_per_kwh": args.average_cost_per_kwh,
         "cost_model": args.cost_model,
         "repeats": args.repeats,
         "report_level": args.report_level,
@@ -79,7 +72,6 @@ def apply_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dict[st
 
     printer_overrides = {
         "warmup_minutes": args.warmup_minutes,
-        "warmup_seconds": args.warmup_seconds,
         "warmup_watts": args.warmup_watts,
         "printing_watts": args.printing_watts,
     }
@@ -90,7 +82,7 @@ def apply_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dict[st
     return cfg
 
 
-def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
+def validate_inputs(weight_grams: float, print_time_minutes: float, config: Dict[str, Any]) -> None:
     def finite_number(name: str, value: Any) -> float:
         try:
             number = float(value)
@@ -103,6 +95,11 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
     weight_grams = finite_number("weight_grams", weight_grams)
     if weight_grams < 0:
         raise ValueError("weight_grams must be non-negative")
+    
+    print_time_minutes = finite_number("print_time_minutes", print_time_minutes)
+    if print_time_minutes < 0:
+        raise ValueError("print_time_minutes must be non-negative")
+    
     if config["cost_model"] not in {"average", "tier2"}:
         raise ValueError("cost_model must be one of: average, tier2")
     if config["report_level"] not in {"summary", "standard", "verbose"}:
@@ -112,16 +109,8 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
         raise ValueError("repeats must be an integer value")
     if repeats_numeric <= 0:
         raise ValueError("repeats must be greater than 0")
-    print_time_minutes = finite_number("print_time_minutes", config["print_time_minutes"])
-    print_time_seconds = finite_number("print_time_seconds", config.get("print_time_seconds", 0.0))
-    if print_time_minutes < 0 or print_time_seconds < 0:
-        raise ValueError("print time values must be non-negative")
-    if print_time_seconds >= 60:
-        raise ValueError("print_time_seconds must be less than 60")
     if finite_number("filament_cost_per_kg", config["filament_cost_per_kg"]) < 0:
         raise ValueError("filament_cost_per_kg must be non-negative")
-    if config.get("average_cost_per_kwh") is not None and finite_number("average_cost_per_kwh", config["average_cost_per_kwh"]) < 0:
-        raise ValueError("average_cost_per_kwh must be non-negative when provided")
 
     electricity = config["electricity"]
     if finite_number("electricity.tier1_kwh", electricity["tier1_kwh"]) < 0:
@@ -140,11 +129,8 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
 
     printer = config["printer"]
     warmup_minutes = finite_number("printer.warmup_minutes", printer["warmup_minutes"])
-    warmup_seconds = finite_number("printer.warmup_seconds", printer["warmup_seconds"])
-    if warmup_minutes < 0 or warmup_seconds < 0:
-        raise ValueError("printer warm-up time values must be non-negative")
-    if warmup_seconds >= 60:
-        raise ValueError("printer.warmup_seconds must be less than 60")
+    if warmup_minutes < 0:
+        raise ValueError("printer warm-up time must be non-negative")
     if finite_number("printer.warmup_watts", printer["warmup_watts"]) < 0:
         raise ValueError("printer.warmup_watts must be non-negative")
     if finite_number("printer.printing_watts", printer["printing_watts"]) < 0:
@@ -152,6 +138,20 @@ def validate_inputs(weight_grams: float, config: Dict[str, Any]) -> None:
 
 
 def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
+    """
+    Computes the effective electricity rate based on the cost model.
+    
+    Returns a dict with:
+      - effective_rate_per_kwh: The rate to use for all calculations (tier rate + fees)
+      - tier_only_rate_per_kwh: The rate from tiers only (before fees)
+      - fees_per_kwh_total: Sum of all per-kWh fees
+      - monthly_usage_kwh: Usage assumed for rate calculation (0 for tier2)
+      - monthly_tier1_kwh: Tier 1 usage (0 for tier2)
+      - monthly_tier2_kwh: Tier 2 usage (0 for tier2)
+      - monthly_tier_only_cost: Total cost of tiers only (0 for tier2)
+      - monthly_fees_cost: Total fees cost (0 for tier2)
+      - monthly_total_cost: Total cost including fees (0 for tier2)
+    """
     electricity = config["electricity"]
     fees_per_kwh_total = sum(float(fee) for fee in electricity["fees_per_kwh"])
 
@@ -161,38 +161,29 @@ def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
             "effective_rate_per_kwh": tier_only_rate + fees_per_kwh_total,
             "tier_only_rate_per_kwh": tier_only_rate,
             "fees_per_kwh_total": fees_per_kwh_total,
-            "monthly_energy_cost": 0.0,
-            "monthly_total_cost": 0.0,
             "monthly_usage_kwh": 0.0,
-            "tier1_usage_kwh": 0.0,
-            "tier2_usage_kwh": 0.0,
+            "monthly_tier1_kwh": 0.0,
+            "monthly_tier2_kwh": 0.0,
+            "monthly_tier_only_cost": 0.0,
+            "monthly_fees_cost": 0.0,
+            "monthly_total_cost": 0.0,
         }
 
-    if config["cost_model"] == "average" and config.get("average_cost_per_kwh") is not None:
-        tier_only_rate = float(config["average_cost_per_kwh"])
-        return {
-            "effective_rate_per_kwh": tier_only_rate + fees_per_kwh_total,
-            "tier_only_rate_per_kwh": tier_only_rate,
-            "fees_per_kwh_total": fees_per_kwh_total,
-            "monthly_energy_cost": 0.0,
-            "monthly_total_cost": 0.0,
-            "monthly_usage_kwh": 0.0,
-            "tier1_usage_kwh": 0.0,
-            "tier2_usage_kwh": 0.0,
-        }
-
+    # Model: "average" — compute effective rate based on typical monthly usage
     usage = float(electricity["typical_monthly_kwh"])
     tier1_limit = float(electricity["tier1_kwh"])
     tier1_usage = min(usage, tier1_limit)
     tier2_usage = max(usage - tier1_usage, 0.0)
 
-    monthly_energy_cost = (
+    monthly_tier_only_cost = (
         tier1_usage * float(electricity["tier1_rate_per_kwh"])
         + tier2_usage * float(electricity["tier2_rate_per_kwh"])
     )
-    monthly_total_cost = monthly_energy_cost + (usage * fees_per_kwh_total)
+    monthly_fees_cost = usage * fees_per_kwh_total
+    monthly_total_cost = monthly_tier_only_cost + monthly_fees_cost
+    
     if usage > 0:
-        tier_only_rate = monthly_energy_cost / usage
+        tier_only_rate = monthly_tier_only_cost / usage
         effective_rate = monthly_total_cost / usage
     else:
         tier_only_rate = float(electricity["tier1_rate_per_kwh"])
@@ -202,20 +193,21 @@ def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
         "effective_rate_per_kwh": effective_rate,
         "tier_only_rate_per_kwh": tier_only_rate,
         "fees_per_kwh_total": fees_per_kwh_total,
-        "monthly_energy_cost": monthly_energy_cost,
-        "monthly_total_cost": monthly_total_cost,
         "monthly_usage_kwh": usage,
-        "tier1_usage_kwh": tier1_usage,
-        "tier2_usage_kwh": tier2_usage,
+        "monthly_tier1_kwh": tier1_usage,
+        "monthly_tier2_kwh": tier2_usage,
+        "monthly_tier_only_cost": monthly_tier_only_cost,
+        "monthly_fees_cost": monthly_fees_cost,
+        "monthly_total_cost": monthly_total_cost,
     }
 
 
-def estimate_cost(weight_grams: float, config: Dict[str, Any]) -> Dict[str, Any]:
-    validate_inputs(weight_grams, config)
+def estimate_cost(weight_grams: float, print_time_minutes: float, config: Dict[str, Any]) -> Dict[str, Any]:
+    validate_inputs(weight_grams, print_time_minutes, config)
 
     repeats = int(float(config["repeats"]))
-    print_seconds = float(config["print_time_minutes"]) * 60.0 + float(config.get("print_time_seconds", 0.0))
-    warmup_seconds = float(config["printer"]["warmup_minutes"]) * 60.0 + float(config["printer"]["warmup_seconds"])
+    print_seconds = float(print_time_minutes) * 60.0
+    warmup_seconds = float(config["printer"]["warmup_minutes"]) * 60.0
 
     filament_cost_total = (weight_grams / 1000.0) * float(config["filament_cost_per_kg"]) * repeats
 
@@ -304,13 +296,16 @@ def render_report(config: Dict[str, Any], result: Dict[str, Any]) -> str:
             f"Monthly usage for average model (kWh): {result['rate_details']['monthly_usage_kwh']:.4f}"
         )
         lines.append(
-            f"Monthly tier-1 usage (kWh): {result['rate_details']['tier1_usage_kwh']:.4f}"
+            f"Monthly tier-1 usage (kWh): {result['rate_details']['monthly_tier1_kwh']:.4f}"
         )
         lines.append(
-            f"Monthly tier-2 usage (kWh): {result['rate_details']['tier2_usage_kwh']:.4f}"
+            f"Monthly tier-2 usage (kWh): {result['rate_details']['monthly_tier2_kwh']:.4f}"
         )
         lines.append(
-            f"Monthly energy-only cost ($): {result['rate_details']['monthly_energy_cost']:.4f}"
+            f"Monthly tier-only cost ($): {result['rate_details']['monthly_tier_only_cost']:.4f}"
+        )
+        lines.append(
+            f"Monthly fees cost ($): {result['rate_details']['monthly_fees_cost']:.4f}"
         )
         lines.append(
             f"Monthly total cost incl. fees ($): {result['rate_details']['monthly_total_cost']:.4f}"
@@ -322,12 +317,10 @@ def render_report(config: Dict[str, Any], result: Dict[str, Any]) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Estimate 3D printing costs.")
     parser.add_argument("weight_grams", type=float, help="Filament weight required in grams.")
+    parser.add_argument("--print-time-minutes", type=float, required=True, help="Print time in minutes.")
 
     parser.add_argument("--config", default="threedeepea_config.json", help="Path to JSON config file.")
-    parser.add_argument("--print-time-minutes", type=float)
-    parser.add_argument("--print-time-seconds", type=float)
     parser.add_argument("--filament-cost-per-kg", type=float)
-    parser.add_argument("--average-cost-per-kwh", type=float)
     parser.add_argument("--cost-model", "--electricity-model", dest="cost_model", choices=["average", "tier2"])
     parser.add_argument("--repeats", type=int)
     parser.add_argument("--report-level", choices=["summary", "standard", "verbose"])
@@ -339,7 +332,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--typical-monthly-kwh", type=float)
 
     parser.add_argument("--warmup-minutes", type=float)
-    parser.add_argument("--warmup-seconds", type=float)
     parser.add_argument("--warmup-watts", type=float)
     parser.add_argument("--printing-watts", type=float)
 
@@ -354,7 +346,7 @@ def main() -> None:
         config_path = Path(args.config)
         config = load_config(config_path)
         config = apply_overrides(config, args)
-        result = estimate_cost(args.weight_grams, config)
+        result = estimate_cost(args.weight_grams, args.print_time_minutes, config)
     except ValueError as error:
         parser.error(str(error))
         return
