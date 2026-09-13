@@ -5,12 +5,12 @@ Command line Python tool for estimating 3D print cost.
 ## Usage
 
 ```bash
-python threedeepea.py WEIGHT_GRAMS --print-time-minutes MINUTES [options]
+python threedeepea.py WEIGHT_GRAMS --print-time HH:MM:SS [options]
 ```
 
 Required inputs:
 - `WEIGHT_GRAMS`: filament mass for one print job (a complete print tray with a single warm-up phase).
-- `--print-time-minutes`: print time in minutes.
+- `--print-time`: print time as `HH:MM:SS`, with exactly two digits per field (no decimals). Hours 00-99, minutes 00-59, seconds 00-59 (e.g. `02:20:00` for 2 hours 20 minutes).
 
 Optional inputs are read from `threedeepea_config.json` and can all be overridden via CLI flags:
 - filament cost (`--filament-cost-per-kg`)
@@ -22,8 +22,8 @@ Optional inputs are read from `threedeepea_config.json` and can all be overridde
 
 ## Reporting levels
 
-- `summary` (default): cost per plate plus filament and electricity totals.
-- `standard`: summary + warm-up and printing electricity subtotals.
+- `summary` (default): cost per plate plus filament and electricity totals. Electricity figures are shown to 4 decimal places so small warm-up/printing costs remain visible instead of rounding to $0.00.
+- `standard`: summary + warm-up and printing electricity subtotals (also shown to 4 decimal places).
 - `verbose`: standard + resolved configuration + intermediate calculations.
 
 If you provide one or more `--fee-per-kwh` flags, they replace the config file's `fees_per_kwh` list.
