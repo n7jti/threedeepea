@@ -1,0 +1,18 @@
+{
+  "filament_cost_per_kg": 20.0,
+  "cost_model": "average",
+  "repeats": 1,
+  "report_level": "summary",
+  "electricity": {
+    "tier1_kwh": 600.0,
+    "tier1_rate_per_kwh": 0.148363,
+    "tier2_rate_per_kwh": 0.167780,
+    "fees_per_kwh": [0.0009409, 0.038719, -0.006648, -0.002378],
+    "typical_monthly_kwh": 1100
+  },
+  "printer": {
+    "warmup_minutes": 5.0,
+    "warmup_watts": 220.0,
+    "printing_watts": 120.0
+  }
+}
