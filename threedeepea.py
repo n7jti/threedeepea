@@ -1,9 +1,36 @@
 import argparse
 import json
 import math
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List
+
+HHMMSS_PATTERN = re.compile(r"^(\d{2}):(\d{2}):(\d{2})$")
+
+
+def parse_hhmmss(value: str) -> float:
+    """
+    Parses a print time given as a strict HH:MM:SS string (two digits per
+    field, no decimals) and returns the total number of seconds.
+
+    Hours must be 00-99, minutes and seconds must be 00-59.
+    """
+    match = HHMMSS_PATTERN.match(str(value).strip())
+    if not match:
+        raise ValueError(
+            f"print time must be in HH:MM:SS format with two digits per field, got {value!r}"
+        )
+
+    hours, minutes, seconds = (int(part) for part in match.groups())
+    if not 0 <= hours <= 99:
+        raise ValueError("print time hours must be between 00 and 99")
+    if not 0 <= minutes <= 59:
+        raise ValueError("print time minutes must be between 00 and 59")
+    if not 0 <= seconds <= 59:
+        raise ValueError("print time seconds must be between 00 and 59")
+
+    return float(hours * 3600 + minutes * 60 + seconds)
 
 
 DEFAULT_CONFIG: Dict[str, Any] = {
@@ -82,7 +109,7 @@ def apply_overrides(config: Dict[str, Any], args: argparse.Namespace) -> Dict[st
     return cfg
 
 
-def validate_inputs(weight_grams: float, print_time_minutes: float, config: Dict[str, Any]) -> None:
+def validate_inputs(weight_grams: float, print_time_seconds: float, config: Dict[str, Any]) -> None:
     def finite_number(name: str, value: Any) -> float:
         try:
             number = float(value)
@@ -96,9 +123,9 @@ def validate_inputs(weight_grams: float, print_time_minutes: float, config: Dict
     if weight_grams < 0:
         raise ValueError("weight_grams must be non-negative")
     
-    print_time_minutes = finite_number("print_time_minutes", print_time_minutes)
-    if print_time_minutes < 0:
-        raise ValueError("print_time_minutes must be non-negative")
+    print_time_seconds = finite_number("print_time_seconds", print_time_seconds)
+    if print_time_seconds < 0:
+        raise ValueError("print_time_seconds must be non-negative")
     
     if config["cost_model"] not in {"average", "tier2"}:
         raise ValueError("cost_model must be one of: average, tier2")
@@ -202,11 +229,11 @@ def compute_effective_rate(config: Dict[str, Any]) -> Dict[str, float]:
     }
 
 
-def estimate_cost(weight_grams: float, print_time_minutes: float, config: Dict[str, Any]) -> Dict[str, Any]:
-    validate_inputs(weight_grams, print_time_minutes, config)
+def estimate_cost(weight_grams: float, print_time_seconds: float, config: Dict[str, Any]) -> Dict[str, Any]:
+    validate_inputs(weight_grams, print_time_seconds, config)
 
     repeats = int(float(config["repeats"]))
-    print_seconds = float(print_time_minutes) * 60.0
+    print_seconds = float(print_time_seconds)
     warmup_seconds = float(config["printer"]["warmup_minutes"]) * 60.0
 
     filament_cost_total = (weight_grams / 1000.0) * float(config["filament_cost_per_kg"]) * repeats
@@ -246,8 +273,8 @@ def estimate_cost(weight_grams: float, print_time_minutes: float, config: Dict[s
     }
 
 
-def format_currency(value: float) -> str:
-    return f"${value:.2f}"
+def format_currency(value: float, decimals: int = 2) -> str:
+    return f"${value:.{decimals}f}"
 
 
 def render_report(config: Dict[str, Any], result: Dict[str, Any]) -> str:
@@ -258,14 +285,14 @@ def render_report(config: Dict[str, Any], result: Dict[str, Any]) -> str:
 
     if level == "summary":
         lines.append(f"Filament: {format_currency(result['filament_cost_total'])}")
-        lines.append(f"Electricity: {format_currency(result['electric_cost_total'])}")
+        lines.append(f"Electricity: {format_currency(result['electric_cost_total'], decimals=4)}")
         lines.append(f"Total job cost ({result['repeats']} prints): {format_currency(result['total_cost'])}")
         return "\n".join(lines)
 
     lines.append(f"Filament subtotal: {format_currency(result['filament_cost_total'])}")
-    lines.append(f"Electricity subtotal: {format_currency(result['electric_cost_total'])}")
-    lines.append(f"  Warm-up electricity: {format_currency(result['warmup_electric_cost'])}")
-    lines.append(f"  Printing electricity: {format_currency(result['printing_electric_cost'])}")
+    lines.append(f"Electricity subtotal: {format_currency(result['electric_cost_total'], decimals=4)}")
+    lines.append(f"  Warm-up electricity: {format_currency(result['warmup_electric_cost'], decimals=4)}")
+    lines.append(f"  Printing electricity: {format_currency(result['printing_electric_cost'], decimals=4)}")
     lines.append(f"Total job cost ({result['repeats']} prints): {format_currency(result['total_cost'])}")
 
     if level == "verbose":
@@ -314,10 +341,24 @@ def render_report(config: Dict[str, Any], result: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _print_time_arg_type(value: str) -> float:
+    """Wraps parse_hhmmss so argparse surfaces our validation message."""
+    try:
+        return parse_hhmmss(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Estimate 3D printing costs.")
     parser.add_argument("weight_grams", type=float, help="Filament weight required in grams.")
-    parser.add_argument("--print-time-minutes", type=float, required=True, help="Print time in minutes.")
+    parser.add_argument(
+        "--print-time",
+        type=_print_time_arg_type,
+        required=True,
+        metavar="HH:MM:SS",
+        help="Print time as HH:MM:SS (two digits per field, hours 00-99, minutes/seconds 00-59).",
+    )
 
     parser.add_argument("--config", default="threedeepea_config.json", help="Path to JSON config file.")
     parser.add_argument("--filament-cost-per-kg", type=float)
@@ -346,7 +387,7 @@ def main() -> None:
         config_path = Path(args.config)
         config = load_config(config_path)
         config = apply_overrides(config, args)
-        result = estimate_cost(args.weight_grams, args.print_time_minutes, config)
+        result = estimate_cost(args.weight_grams, args.print_time, config)
     except ValueError as error:
         parser.error(str(error))
         return

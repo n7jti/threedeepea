@@ -1,5 +1,5 @@
 {
-  "filament_cost_per_kg": 20.0,
+  "filament_cost_per_kg": 30.0,
   "cost_model": "average",
   "repeats": 1,
   "report_level": "summary",

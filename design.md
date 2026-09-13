@@ -7,7 +7,7 @@ A command-line Python tool for estimating the cost of 3D printing, accounting fo
 
 ### 1. Required Inputs
 - **Filament weight (grams)**: The mass of filament needed for a single print job (one print tray, single warm-up phase).
-- **Print time (minutes)**: Duration of the printing phase.
+- **Print time (`--print-time HH:MM:SS`)**: Duration of the printing phase, given as a strict two-digit-per-field string (hours 00-99, minutes 00-59, seconds 00-59, no decimals). Parsed into total seconds internally.
 
 ### 2. Optional Inputs (from config file or CLI overrides)
 - **Filament cost ($/kg)**: Cost per kilogram of filament.
@@ -57,11 +57,11 @@ Assumes all print electricity is consumed at the marginal Tier 2 rate:
 #### 5.4 Printer Power Model
 The printer has two phases:
 - **Warm-up phase**: Fixed power draw (warmup_watts) for warmup duration → warmup_kwh
-- **Printing phase**: Variable power draw (printing_watts) for print_time_minutes → printing_kwh
+- **Printing phase**: Variable power draw (printing_watts) for print_time_seconds → printing_kwh
 
 For a single plate:
 - warmup_kwh_single = (warmup_minutes × 60 / 3600) × (warmup_watts / 1000)
-- printing_kwh_single = (print_minutes × 60 / 3600) × (printing_watts / 1000)
+- printing_kwh_single = (print_seconds / 3600) × (printing_watts / 1000)
 
 For repeated runs:
 - warmup_kwh_total = warmup_kwh_single × repeats
@@ -85,15 +85,15 @@ cost_per_plate = total_cost / repeats
 ### 7. Reporting Modes
 
 #### 7.1 Summary (default)
-- Cost per plate
-- Filament cost total
-- Electricity cost total
-- Total job cost (for all repeats)
+- Cost per plate ($, 2 decimal places)
+- Filament cost total ($, 2 decimal places)
+- Electricity cost total ($, 4 decimal places, so small warm-up-only costs remain visible instead of rounding to $0.00)
+- Total job cost (for all repeats, $, 2 decimal places)
 
 #### 7.2 Standard
 - Cost per plate
 - Filament subtotal
-- Electricity subtotal (broken into warm-up and printing components)
+- Electricity subtotal (broken into warm-up and printing components, $, 4 decimal places each)
 - Total job cost
 
 #### 7.3 Verbose
@@ -109,7 +109,7 @@ cost_per_plate = total_cost / repeats
 
 ### 8. Validation
 - Weight must be non-negative.
-- Print time must be non-negative.
+- Print time must be non-negative, and given via `--print-time` as `HH:MM:SS` with exactly two digits per field (hours 00-99, minutes 00-59, seconds 00-59); any other format is rejected.
 - Filament cost must be non-negative.
 - Repeats must be a positive integer.
 - Cost model must be one of: `average`, `tier2`.
@@ -127,18 +127,18 @@ cost_per_plate = total_cost / repeats
 
 ```bash
 # Basic usage with print time (required)
-python threedeepea.py 85 --print-time-minutes 140
+python threedeepea.py 85 --print-time 02:20:00
 
 # With custom electricity model and fees
 python threedeepea.py 85 \
-  --print-time-minutes 140 \
+  --print-time 02:20:00 \
   --electricity-model average \
   --fee-per-kwh 0.03 \
   --report-level standard
 
 # Repeat run with verbose output
 python threedeepea.py 85 \
-  --print-time-minutes 140 \
+  --print-time 02:20:00 \
   --repeats 5 \
   --report-level verbose
 ```
